@@ -9,7 +9,6 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
-import reactor.core.scheduler.Schedulers;
 
 @RestController
 @AllArgsConstructor
@@ -21,18 +20,14 @@ public class McpService {
     public Flux<ChatResponse> processPromptStreaming(@RequestBody String promptText) {
         ChatClient chatClient = mcpDemoConfiguration.prepareChatClient();
 
-        return Flux.defer(() -> {
-
-            var prompt = new Prompt(promptText);
-
-            return chatClient.prompt(prompt).stream().chatResponse();
-        }).subscribeOn(Schedulers.boundedElastic());
+        var prompt = new Prompt(promptText);
+        return chatClient.prompt(prompt).stream().chatResponse();
     }
 
     public ChatResponse processPrompt(@RequestBody String promptText) {
         ChatClient chatClient = mcpDemoConfiguration.prepareChatClient();
 
-            var prompt = new Prompt(promptText);
-            return chatClient.prompt(prompt).call().chatResponse();
+        var prompt = new Prompt(promptText);
+        return chatClient.prompt(prompt).call().chatResponse();
     }
 }

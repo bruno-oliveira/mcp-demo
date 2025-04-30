@@ -2,12 +2,15 @@ package my.company.mcpdemo;
 
 import lombok.extern.slf4j.Slf4j;
 import my.company.mcpdemo.service.McpService;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
+import java.time.Duration;
 import java.util.Scanner;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @SpringBootApplication
 @Slf4j
@@ -38,10 +41,37 @@ public class McpDemoApplication {
 
                 System.out.print("Assistant: ");
 
-                final boolean[] contentReceived = {false};
+                AtomicBoolean contentReceived = new AtomicBoolean(false);
 
-                System.out.println(mcpService.processPrompt(input).getResult().getOutput().getText());
+                try {
+                    mcpService.processPromptStreaming(input).doOnNext(token -> {
+                                // Print each token without a newline
+                            Generation result = token.getResult();
+                            if(result!=null && result.getMetadata().getFinishReason()==null) {
+
+                                System.out.print(result.getOutput().getText());
+                                System.out.flush(); // Ensure immediate display
+                                contentReceived.set(true);
+                            }
+                        })
+                        .doOnComplete(() -> {
+                            if (!contentReceived.get()) {
+                                System.out.print("[No content available]");
+                            }
+                            System.out.println("\n"); // Add double newline after completion
+                        })
+                        .doOnError(error -> {
+                            System.err.println("\nError occurred: " + error.getMessage());
+                        })
+                        // .onErrorReturn(null) // Continue even if there's an error
+                        .blockLast(Duration.ofSeconds(30)); // Set a reasonable timeout
+
+                } catch (Exception e) {
+                    System.err.println("\nFailed to process response: " + e.getMessage());
+                    e.printStackTrace(System.err);
+                }
+
             }
         };
-        }
+    }
 }
