@@ -11,7 +11,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
-import java.util.UUID;
 
 @Configuration
 @AllArgsConstructor
@@ -32,8 +31,7 @@ public class McpDemoConfiguration {
         return ChatClient.builder(chatModel)
             .defaultSystem(DEFAULT_SYSTEM_PROMPT)
             .defaultTools(new SyncMcpToolCallbackProvider(mcpSyncClients))
-            .defaultAdvisors(new MessageChatMemoryAdvisor(new InMemoryChatMemory(), UUID.randomUUID().toString(),
-                100, 1))
+            .defaultAdvisors(new MessageChatMemoryAdvisor(new InMemoryChatMemory()))
             .build();
     }
 }
