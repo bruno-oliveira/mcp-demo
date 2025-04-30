@@ -43,35 +43,49 @@ public class McpDemoApplication {
 
                 AtomicBoolean contentReceived = new AtomicBoolean(false);
 
-                try {
-                    mcpService.processPromptStreaming(input).doOnNext(token -> {
-                                // Print each token without a newline
-                            Generation result = token.getResult();
-                            if(result!=null && result.getMetadata().getFinishReason()==null) {
-
-                                System.out.print(result.getOutput().getText());
-                                System.out.flush(); // Ensure immediate display
-                                contentReceived.set(true);
-                            }
-                        })
-                        .doOnComplete(() -> {
-                            if (!contentReceived.get()) {
-                                System.out.print("[No content available]");
-                            }
-                            System.out.println("\n"); // Add double newline after completion
-                        })
-                        .doOnError(error -> {
-                            System.err.println("\nError occurred: " + error.getMessage());
-                        })
-                        // .onErrorReturn(null) // Continue even if there's an error
-                        .blockLast(Duration.ofSeconds(30)); // Set a reasonable timeout
-
-                } catch (Exception e) {
-                    System.err.println("\nFailed to process response: " + e.getMessage());
-                    e.printStackTrace(System.err);
-                }
+                streamingMode(mcpService, input, contentReceived);
 
             }
         };
+    }
+
+    private static void standardMode(McpService mcpService, String input) {
+        try {
+            System.out.println(mcpService.processPrompt(input).getResult().getOutput().getText());
+
+        } catch (Exception e) {
+            System.err.println("\nFailed to process response: " + e.getMessage());
+            e.printStackTrace(System.err);
+        }
+    }
+
+
+    private static void streamingMode(McpService mcpService, String input, AtomicBoolean contentReceived) {
+        try {
+            mcpService.processPromptStreaming(input).doOnNext(token -> {
+                // Print each token without a newline
+                    Generation result = token.getResult();
+                    if(result!=null) {
+
+                        System.out.print(result.getOutput().getText());
+                        System.out.flush(); // Ensure immediate display
+                        contentReceived.set(true);
+                    }
+                })
+                .doOnComplete(() -> {
+                    if (!contentReceived.get()) {
+                        System.out.print("[No content available]");
+                    }
+                    System.out.println("\n"); // Add double newline after completion
+                })
+                .doOnError(error -> {
+                    System.err.println("\nError occurred: " + error.getMessage());
+                })
+                .blockLast(Duration.ofSeconds(60)); // Set a reasonable timeout
+
+        } catch (Exception e) {
+            System.err.println("\nFailed to process response: " + e.getMessage());
+            e.printStackTrace(System.err);
+        }
     }
 }
