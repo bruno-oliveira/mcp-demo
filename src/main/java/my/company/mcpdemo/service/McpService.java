@@ -21,6 +21,7 @@ public class McpService {
         ChatClient chatClient = mcpDemoConfiguration.prepareChatClient();
 
         var prompt = new Prompt(promptText);
+
         return chatClient.prompt(prompt).stream().chatResponse();
     }
 

@@ -2,14 +2,18 @@ package my.company.mcpdemo;
 
 import lombok.extern.slf4j.Slf4j;
 import my.company.mcpdemo.service.McpService;
-import org.springframework.ai.chat.model.Generation;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.web.reactive.function.client.WebClient;
 
-import java.time.Duration;
 import java.util.Scanner;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @SpringBootApplication
@@ -43,8 +47,7 @@ public class McpDemoApplication {
 
                 AtomicBoolean contentReceived = new AtomicBoolean(false);
 
-                streamingMode(mcpService, input, contentReceived);
-
+                standardMode(mcpService, input);
             }
         };
     }
@@ -60,32 +63,56 @@ public class McpDemoApplication {
     }
 
 
-    private static void streamingMode(McpService mcpService, String input, AtomicBoolean contentReceived) {
-        try {
-            mcpService.processPromptStreaming(input).doOnNext(token -> {
-                // Print each token without a newline
-                    Generation result = token.getResult();
-                    if(result!=null) {
+    private static void streamingMode(String input, AtomicBoolean contentReceived) {
+        System.out.println("Starting stream processing with SSE...");
 
-                        System.out.print(result.getOutput().getText());
+        // Create WebClient for communicating with our controller
+        WebClient webClient = WebClient.builder()
+            .baseUrl("http://localhost:8080") // Adjust if your server runs on a different port
+            .build();
+
+        // Create a latch to wait for completion
+        CountDownLatch latch = new CountDownLatch(1);
+
+        // Make a request to our streaming endpoint
+        // Now using POST with JSON body instead of URL parameters
+        webClient.post()
+            .uri("/api/chat/stream")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(input) // Send the prompt directly in the request body
+            .retrieve()
+            .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
+            .subscribe(
+                event -> {
+                    // Process each chunk as it arrives
+                    if (event.data() != null) {
+                        System.out.print(event.data());
                         System.out.flush(); // Ensure immediate display
                         contentReceived.set(true);
                     }
-                })
-                .doOnComplete(() -> {
+                },
+                error -> {
+                    System.err.println("\nError occurred: " + error.getMessage());
+                    latch.countDown();
+                },
+                () -> {
                     if (!contentReceived.get()) {
                         System.out.print("[No content available]");
                     }
-                    System.out.println("\n"); // Add double newline after completion
-                })
-                .doOnError(error -> {
-                    System.err.println("\nError occurred: " + error.getMessage());
-                })
-                .blockLast(Duration.ofSeconds(60)); // Set a reasonable timeout
+                    System.out.println("\n"); // Add newline after completion
+                    latch.countDown();
+                }
+            );
 
-        } catch (Exception e) {
-            System.err.println("\nFailed to process response: " + e.getMessage());
-            e.printStackTrace(System.err);
+        try {
+            System.out.println("Waiting for stream to complete...");
+            if (!latch.await(2, TimeUnit.MINUTES)) {
+                System.err.println("Timeout waiting for response");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("Interrupted while waiting for response");
         }
     }
+
 }
